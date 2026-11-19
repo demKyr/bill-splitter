@@ -4,8 +4,12 @@
  */
 import { formatEther } from "viem";
 import { ACCOUNTS, billSplitterAbi, loadDeployment, publicClient, RPC_URL } from "./chain";
+import { mountRequests } from "./requests";
 
 const app = document.querySelector<HTMLElement>("#app")!;
+const status = document.createElement("div");
+const page = document.createElement("div");
+app.append(status, page);
 
 /** Runs one check, and returns its result or the reason that it failed. */
 async function check(run: () => Promise<string>): Promise<string> {
@@ -42,7 +46,7 @@ async function render(): Promise<void> {
     return `${deployment.contract} at ${deployment.address}, ${count} requests`;
   });
 
-  app.innerHTML = `
+  status.innerHTML = `
     <h1>Bill splitter</h1>
     <ul>
       <li>Anvil at ${RPC_URL}: ${chain}</li>
@@ -51,4 +55,15 @@ async function render(): Promise<void> {
     </ul>`;
 }
 
+/** Part 1: mounts the requests page once a contract is deployed. */
+async function mountPage(): Promise<void> {
+  const deployment = await loadDeployment().catch(() => null);
+  if (!deployment) {
+    page.textContent = "No contract is deployed. Run: node scripts/deploy.mjs mock, then reload.";
+    return;
+  }
+  mountRequests(page, deployment);
+}
+
 void render();
+void mountPage();

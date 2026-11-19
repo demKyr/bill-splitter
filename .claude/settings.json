@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": ["Bash(forge fmt:*)", "Bash(forge build:*)", "Bash(forge test:*)", "Bash(npm run typecheck:*)"]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "timeout": 10, "command": "node \"$(git rev-parse --show-toplevel)\"/scripts/hooks/guard-locked.mjs" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|Bash",
+        "hooks": [
+          { "type": "command", "timeout": 10, "command": "node \"$(git rev-parse --show-toplevel)\"/scripts/hooks/guard-locked.mjs --after" }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "timeout": 120, "command": "\"$(git rev-parse --show-toplevel)\"/scripts/hooks/forge-check.sh" }
+        ]
+      }
+    ]
+  }
+}

@@ -30,10 +30,24 @@ abstract contract Requests is BillSplitterBase {
     }
 
     /// @inheritdoc IBillSplitter
-    function shareOf(uint256 requestId, address) public view returns (uint256) {
-        _existingRequest(requestId);
-        // TODO: the share of this participant, as docs/SPEC_CONTRACTS.md defines it.
-        revert BillSplitter__NotImplemented();
+    function shareOf(uint256 requestId, address participant) public view returns (uint256) {
+        Request storage request = _existingRequest(requestId);
+        if (!_includes(request.participants, participant)) return 0;
+        return _ceilDiv(request.amount, request.participants.length);
+    }
+
+    /// @dev Whether `account` is in `participants` (R8).
+    function _includes(address[] storage participants, address account) internal view returns (bool) {
+        uint256 count = participants.length;
+        for (uint256 i = 0; i < count; i++) {
+            if (participants[i] == account) return true;
+        }
+        return false;
+    }
+
+    /// @dev `amount / n`, rounded up to the next whole wei (R7, R11). Cannot overflow.
+    function _ceilDiv(uint256 amount, uint256 n) internal pure returns (uint256) {
+        return amount / n + (amount % n == 0 ? 0 : 1);
     }
 
     function _checkParticipants(address[] calldata participants) internal pure {
