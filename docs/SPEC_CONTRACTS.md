@@ -28,6 +28,7 @@ The contract handles ETH only: no ERC-20 tokens. It has no deadlines and no part
 - R10. The contract rejects a call with an unknown request ID with `BillSplitter__RequestNotFound`.
 - R11. When the amount does not divide evenly by the number of participants, the share of each participant is the amount divided by that number, rounded up to the next whole wei. Each participant owes the same share. Example: 1 wei among 3 participants is 1 wei each. The total of the shares can be up to (number of participants − 1) wei more than the amount. The contract does not overflow for any amount.
 - R12. The requester can be one of the participants. The requester then owes a share like any other participant.
+- R13. When a request breaks more than one rule, the contract rejects it with the error of the first rule that it breaks. The contract checks in this order: amount (R2), number of participants (R3), then each participant in list order (R4, then R5).
 
 ## Part 2: payments (optional)
 

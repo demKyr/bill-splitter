@@ -41,6 +41,7 @@ This file describes the web page in `webapp/`, from the user's side. The page sh
 - F22. The page does not check the number of participants itself. When the user chooses no participant, the contract rejects the request, and the page tells the user to choose at least one participant, as F5 and F12 say.
 - F23. When the user chooses an acting account and no account was chosen before, the participant list of the create form has that account chosen. The user can remove it. The page chooses no other participant. After the contract creates a request, the form clears, and the acting account is chosen again as a participant.
 - F24. When the user changes the acting account, the participant list of the create form does not change. The page does not choose the new acting account as a participant.
+- F25. The signing screen shows each amount in ETH exactly, with no rounding, and never as "<0.000001". F16 and F20 do not apply to it.
 
 ## Part 2: payments (optional)
 
