@@ -1,11 +1,16 @@
 /** docs/SPEC_FRONTEND.md, Part 1 (acting account, create form, list of requests) and Part 2 (payments). */
-import { BaseError, ContractFunctionRevertedError, formatEther, parseEther, parseEventLogs, type Address, type Hex } from "viem";
+import { BaseError, ContractFunctionRevertedError, formatEther, formatUnits, parseEther, parseUnits, parseEventLogs, type Address, type Hex } from "viem";
 import { ACCOUNTS, billSplitterAbi, publicClient, walletClientFor, type Deployment } from "./chain";
 import { accountName, formatEth, sameAddress } from "./format";
 import { askToSign } from "./wallet";
 
 /** F21: a decimal number of zero or more, with at most 18 decimals. */
 const AMOUNT_FORMAT = /^\d+(\.\d{1,18})?$/;
+/** F27, F29: a percentage has at most 2 decimals. */
+const PERCENT_FORMAT = /^\d+(\.\d{1,2})?$/;
+
+/** F26: the split of the create form. */
+type Split = "equal" | "percentage" | "exact";
 
 type ShareView = { participant: Address; share: bigint; paid: boolean };
 type RequestView = { id: bigint; requester: Address; amount: bigint; shares: ShareView[] };
@@ -25,6 +30,11 @@ export function mountRequests(root: HTMLElement, deployment: Deployment): void {
       <h2>Create a request</h2>
       <form id="create" novalidate>
         <label>Amount in ETH <input id="amount" type="text" inputmode="decimal" autocomplete="off" /></label>
+        <fieldset id="split"><legend>Split</legend>
+          <label><input type="radio" name="split" value="equal" checked /> Equal</label>
+          <label><input type="radio" name="split" value="percentage" /> Percentage</label>
+          <label><input type="radio" name="split" value="exact" /> Exact amounts</label>
+        </fieldset>
         <fieldset id="participants"><legend>Participants</legend></fieldset>
         <button id="create-button" type="submit"></button>
         <span id="create-reason"></span>
@@ -52,8 +62,19 @@ export function mountRequests(root: HTMLElement, deployment: Deployment): void {
     box.type = "checkbox";
     box.name = "participant";
     box.value = account.address;
-    label.append(box, ` ${accountName(account.address)}`);
-    fieldset.append(label);
+    // F27: the input of the share of this participant, shown for a Percentage or Exact amounts split.
+    const share = document.createElement("input");
+    share.type = "text";
+    share.inputMode = "decimal";
+    share.autocomplete = "off";
+    share.name = "share";
+    share.hidden = true;
+    const unit = document.createElement("span");
+    unit.hidden = true;
+    label.append(box, ` ${accountName(account.address)} `, share, unit);
+    const row = document.createElement("div");
+    row.append(label);
+    fieldset.append(row);
   }
 
   const ui = {
@@ -62,6 +83,9 @@ export function mountRequests(root: HTMLElement, deployment: Deployment): void {
     form: root.querySelector<HTMLFormElement>("#create")!,
     amount: root.querySelector<HTMLInputElement>("#amount")!,
     boxes: [...fieldset.querySelectorAll<HTMLInputElement>("input[name=participant]")],
+    shares: [...fieldset.querySelectorAll<HTMLInputElement>("input[name=share]")],
+    units: [...fieldset.querySelectorAll<HTMLSpanElement>("input[name=share] + span")],
+    splits: [...root.querySelectorAll<HTMLInputElement>("input[name=split]")],
     button: root.querySelector<HTMLButtonElement>("#create-button")!,
     reason: root.querySelector<HTMLElement>("#create-reason")!,
     message: root.querySelector<HTMLElement>("#message")!,
@@ -77,9 +101,20 @@ export function mountRequests(root: HTMLElement, deployment: Deployment): void {
     const hadNone = acting === null;
     acting = (select.value || null) as Address | null;
     if (hadNone && acting) chooseParticipant(ui.boxes, acting); // F23; F24: no change otherwise
+    showShareInputs(ui);
     showActing(ui);
     refresh(); // F18
   });
+
+  // F31: changing the split keeps the participants and clears the share inputs.
+  for (const radio of ui.splits)
+    radio.addEventListener("change", () => {
+      for (const share of ui.shares) share.value = "";
+      showShareInputs(ui);
+    });
+  for (const box of ui.boxes) box.addEventListener("change", () => showShareInputs(ui));
+  // F28: a share of zero removes the choice of that participant.
+  for (const share of ui.shares) share.addEventListener("change", () => dropZeroShares(ui));
 
   ui.form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -104,30 +139,44 @@ export function mountRequests(root: HTMLElement, deployment: Deployment): void {
       return;
     }
     const amount = parseEther(input);
-    const participants = ui.boxes.filter((box) => box.checked).map((box) => box.value as Address);
+    const split = splitOf(ui);
+    dropZeroShares(ui); // F28
+    const chosen = ui.boxes.flatMap((box, i) => (box.checked ? [{ participant: box.value as Address, input: ui.shares[i].value.trim() }] : []));
+    const participants = chosen.map((c) => c.participant);
+
+    // F27, F29: check the format of each share input. The page checks no sum (F11).
+    let shares: bigint[] = [];
+    if (split === "percentage") {
+      if (chosen.some((c) => !PERCENT_FORMAT.test(c.input))) {
+        say(ui, "Enter each percentage as a number with at most 2 decimals, e.g. 33.33.");
+        return;
+      }
+      shares = chosen.map((c) => parseUnits(c.input, 2)); // R15: basis points, 33.33 is 3333
+    } else if (split === "exact") {
+      if (chosen.some((c) => !AMOUNT_FORMAT.test(c.input))) {
+        say(ui, "Enter each amount in ETH, with at most 18 decimals.");
+        return;
+      }
+      shares = chosen.map((c) => parseEther(c.input));
+    }
 
     // F12: ask the contract first. This sends nothing.
-    let request;
+    let send: () => Promise<Hex>;
     try {
-      ({ request } = await publicClient.simulateContract({
-        address: deployment.address,
-        abi: billSplitterAbi,
-        functionName: "createRequest",
-        args: [amount, participants],
-        account,
-      }));
+      send = await simulateCreate(deployment, account, split, amount, participants, shares);
     } catch (error) {
-      say(ui, reasonOf(error)); // F5, F11: the form keeps its values
+      say(ui, reasonOf(error, split)); // F5, F11, F30: the form keeps its values
       return;
     }
 
-    // F4, F13: the mock wallet signing screen.
+    // F4, F13, F32: the mock wallet signing screen.
     const signed = await askToSign({
       account,
-      action: "Create request",
+      action: `Create request (${SPLIT_NAMES[split]} split)`,
       values: [
         ["Amount", amount], // wei: the signing screen shows it exactly (F25)
         ["Participants", participants.length ? participants.map(accountName).join(", ") : "none"],
+        ...shareRows(split, participants, shares),
       ],
     });
     if (!signed) {
@@ -136,14 +185,14 @@ export function mountRequests(root: HTMLElement, deployment: Deployment): void {
     }
 
     try {
-      const hash = await walletClientFor(account).writeContract(request);
+      const hash = await send();
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       if (receipt.status !== "success") throw new Error("The transaction was reverted.");
       const [created] = parseEventLogs({ abi: billSplitterAbi, eventName: "RequestCreated", logs: receipt.logs });
       say(ui, `Request ${created.args.requestId} created.`); // F6, F14
       clearForm(ui);
     } catch (error) {
-      say(ui, reasonOf(error));
+      say(ui, reasonOf(error, split));
     }
     refresh(); // F18
   }
@@ -228,6 +277,29 @@ export function mountRequests(root: HTMLElement, deployment: Deployment): void {
   }
 }
 
+/** F12: asks the contract if it accepts the request of this split. Returns the function that sends it. */
+async function simulateCreate(
+  deployment: Deployment,
+  account: Address,
+  split: Split,
+  amount: bigint,
+  participants: Address[],
+  shares: bigint[],
+): Promise<() => Promise<Hex>> {
+  const wallet = walletClientFor(account);
+  const base = { address: deployment.address, abi: billSplitterAbi, account } as const;
+  if (split === "percentage") {
+    const { request } = await publicClient.simulateContract({ ...base, functionName: "createRequestByPercentage", args: [amount, participants, shares] });
+    return () => wallet.writeContract(request);
+  }
+  if (split === "exact") {
+    const { request } = await publicClient.simulateContract({ ...base, functionName: "createRequestByAmounts", args: [amount, participants, shares] });
+    return () => wallet.writeContract(request);
+  }
+  const { request } = await publicClient.simulateContract({ ...base, functionName: "createRequest", args: [amount, participants] });
+  return () => wallet.writeContract(request);
+}
+
 /** Sends a simulated transaction and waits for it. Throws if it reverted. */
 async function sendAndWait(send: () => Promise<Hex>): Promise<void> {
   const hash = await send();
@@ -296,11 +368,54 @@ function chooseParticipant(boxes: HTMLInputElement[], address: Address): void {
   for (const box of boxes) if (sameAddress(box.value as Address, address)) box.checked = true;
 }
 
-/** F6, F23: clears the form and chooses the acting account again. */
-function clearForm(ui: { amount: HTMLInputElement; boxes: HTMLInputElement[] }): void {
+const SPLIT_NAMES: Record<Split, string> = { equal: "Equal", percentage: "Percentage", exact: "Exact amounts" };
+
+/** F32: the percentage or the amount of each participant, exactly (F25 for amounts). */
+function shareRows(split: Split, participants: Address[], shares: bigint[]): [string, string | bigint][] {
+  if (split === "percentage") return participants.map((p, i) => [`Percentage of ${accountName(p)}`, `${formatUnits(shares[i], 2)}%`]);
+  if (split === "exact") return participants.map((p, i) => [`Amount of ${accountName(p)}`, shares[i]]);
+  return [];
+}
+
+type ShareUi = { boxes: HTMLInputElement[]; shares: HTMLInputElement[]; units: HTMLSpanElement[]; splits: HTMLInputElement[] };
+
+function splitOf(ui: { splits: HTMLInputElement[] }): Split {
+  return (ui.splits.find((radio) => radio.checked)?.value ?? "equal") as Split;
+}
+
+/** F27: each chosen participant has a share input in a Percentage or Exact amounts split. */
+function showShareInputs(ui: ShareUi): void {
+  const split = splitOf(ui);
+  ui.boxes.forEach((box, i) => {
+    const show = split !== "equal" && box.checked;
+    ui.shares[i].hidden = !show;
+    ui.units[i].hidden = !show;
+    ui.units[i].textContent = split === "percentage" ? " %" : " ETH";
+    ui.shares[i].setAttribute("aria-label", `${split === "percentage" ? "Percentage" : "Amount in ETH"} of ${accountName(box.value as Address)}`);
+  });
+}
+
+/** F28: a share input of zero removes the choice of its participant. */
+function dropZeroShares(ui: ShareUi): void {
+  if (splitOf(ui) === "equal") return;
+  ui.shares.forEach((share, i) => {
+    const value = share.value.trim();
+    if (ui.boxes[i].checked && AMOUNT_FORMAT.test(value) && /^[0.]+$/.test(value)) {
+      ui.boxes[i].checked = false;
+      share.value = "";
+    }
+  });
+  showShareInputs(ui);
+}
+
+/** F6, F23, F26: clears the form, chooses the acting account again and the Equal split. */
+function clearForm(ui: ShareUi & { amount: HTMLInputElement }): void {
   ui.amount.value = "";
   for (const box of ui.boxes) box.checked = false;
+  for (const share of ui.shares) share.value = "";
+  for (const radio of ui.splits) radio.checked = radio.value === "equal";
   if (acting) chooseParticipant(ui.boxes, acting);
+  showShareInputs(ui);
 }
 
 function say(ui: { message: HTMLElement }, text: string): void {
@@ -308,13 +423,17 @@ function say(ui: { message: HTMLElement }, text: string): void {
 }
 
 /** F5: turns a contract rejection into a reason that the user can act on. */
-function reasonOf(error: unknown): string {
+function reasonOf(error: unknown, split: Split = "equal"): string {
   if (error instanceof BaseError) {
     const revert = error.walk((e) => e instanceof ContractFunctionRevertedError);
     if (revert instanceof ContractFunctionRevertedError) {
       switch (revert.data?.errorName) {
         case "BillSplitter__InvalidAmount":
           return "Enter an amount above zero."; // F21
+        case "BillSplitter__InvalidShares": // F30
+          return split === "percentage"
+            ? "Percentages must be above 0 and add up to 100."
+            : "Amounts must be above 0 and add up to the total.";
         case "BillSplitter__InvalidParticipants":
           return "Choose at least one participant."; // F22
         case "BillSplitter__InvalidParticipant":
