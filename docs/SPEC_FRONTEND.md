@@ -26,7 +26,7 @@ This file describes the web page in `webapp/`, from the user's side. The page sh
 - F7. The page lists the requests that involve the acting account, as requester or as participant, with their count. For each request, the page shows its ID, its amount, its requester, and each participant's share as the contract returns it.
 - F8. When no account is chosen, the list says that the user must choose one. When no request involves the acting account, the list says so.
 - F9. When the page opens, the page has no acting account.
-- F10. Every choice list offers all four test accounts, including the acting account. The page chooses no value for the user, except as F23 says.
+- F10. Every choice list offers all four test accounts, including the acting account. The page chooses no value for the user, except as F23 and F26 say.
 - F11. The page does not apply the rules of the contract itself. When the contract rejects a value, the page shows the reason, as F5 says.
 - F12. Before the page shows the signing screen, the page asks the contract if it accepts the transaction. This step sends no transaction. If the contract rejects the transaction, the page does not show the signing screen. The page shows the reason, as F5 says.
 - F13. The confirmation in F4 is a mock wallet signing screen. The signing screen shows the acting account, the action and each value that the transaction sends. The signing screen has a "Sign" button and a "Cancel" button.
@@ -42,6 +42,13 @@ This file describes the web page in `webapp/`, from the user's side. The page sh
 - F23. When the user chooses an acting account and no account was chosen before, the participant list of the create form has that account chosen. The user can remove it. The page chooses no other participant. After the contract creates a request, the form clears, and the acting account is chosen again as a participant.
 - F24. When the user changes the acting account, the participant list of the create form does not change. The page does not choose the new acting account as a participant.
 - F25. The signing screen shows each amount in ETH exactly, with no rounding, and never as "<0.000001". F16 and F20 do not apply to it.
+- F26. The create form has a choice of split: Equal, Percentage or Exact amounts. Equal is chosen when the page opens, and after the contract creates a request. The user can change it at any time. This rule is an exception to F10.
+- F27. In the Percentage split and the Exact amounts split, each participant that the user chose has an input. The input of a percentage has at most 2 decimals. The input of an amount is in ETH and has at most 18 decimals. A participant that the user did not choose has no input.
+- F28. When the user enters zero in the input of a participant, the page removes the choice of that participant. The page still sends nothing that the contract would accept with a share of zero, as F11 says.
+- F29. The page accepts an input only if it is a decimal number of zero or more, with at most the number of decimals of F27. For any other input, the page sends nothing, tells the user the format, and keeps the values, as F21 says.
+- F30. When the contract rejects a split with `BillSplitter__InvalidShares`, the page tells the user why. For percentages: "Percentages must be above 0 and add up to 100." For exact amounts: "Amounts must be above 0 and add up to the total."
+- F31. When the user changes the split, the page keeps the chosen participants and clears the values that the user entered in the inputs of F27.
+- F32. For a Percentage split and an Exact amounts split, the signing screen shows the percentage or the amount of each participant, exactly. F25 applies to the amounts.
 
 ## Part 2: payments (optional)
 

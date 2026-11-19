@@ -29,6 +29,15 @@ The contract handles ETH only: no ERC-20 tokens. It has no deadlines and no part
 - R11. When the amount does not divide evenly by the number of participants, the share of each participant is the amount divided by that number, rounded up to the next whole wei. Each participant owes the same share. Example: 1 wei among 3 participants is 1 wei each. The total of the shares can be up to (number of participants − 1) wei more than the amount. The contract does not overflow for any amount.
 - R12. The requester can be one of the participants. The requester then owes a share like any other participant.
 - R13. When a request breaks more than one rule, the contract rejects it with the error of the first rule that it breaks. The contract checks in this order: amount (R2), number of participants (R3), then each participant in list order (R4, then R5).
+- R14. A request has one of three splits: equal, percentage or exact. Equal is the split of R7 and R11. `createRequest` creates an equal split.
+- R15. A percentage split gives one percentage for each participant, in basis points: 1 percent is 100, so 33.33 percent is 3333.
+- R16. The contract rejects a percentage split whose percentages do not add up to exactly 10000 with `BillSplitter__InvalidShares`.
+- R17. In a percentage split, the share of a participant is the amount multiplied by the percentage and divided by 10000, rounded up to the next whole wei.
+- R18. An exact split gives one amount for each participant. The contract rejects an exact split whose amounts do not add up to exactly the amount of the request with `BillSplitter__InvalidShares`. In an exact split, the share of a participant is its amount.
+- R19. The contract rejects a percentage or an amount of zero with `BillSplitter__InvalidShares`.
+- R20. The contract rejects a percentage split or an exact split whose list of percentages or amounts has a different length than the list of participants with `BillSplitter__InvalidShares`. When such a request breaks more than one rule, the contract rejects it with the error of the first rule that it breaks. The contract checks in this order: amount (R2, R22), number of participants (R3), length of the list of percentages or amounts (R20), then each participant in list order (R4, then R5), then each percentage or amount in list order (R19), then the sum (R16 or R18).
+- R21. `shareOf` returns the share that R7, R11, R17 or R18 defines for the split of the request. It returns zero for an address that is not a participant (R8). A payment must equal this share (P9).
+- R22. The contract rejects the amount of a percentage split that is more than `type(uint256).max / 10000` with `BillSplitter__InvalidAmount`.
 
 ## Part 2: payments (optional)
 

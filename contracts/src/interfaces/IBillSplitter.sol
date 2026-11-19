@@ -20,6 +20,8 @@ interface IBillSplitter {
     error BillSplitter__InvalidParticipant(address participant);
     /// @notice No request has this ID.
     error BillSplitter__RequestNotFound(uint256 requestId);
+    /// @notice The percentages or the amounts of a split are not allowed: wrong length, a zero, or a wrong sum.
+    error BillSplitter__InvalidShares();
 
     /// @notice The largest number of participants in one request.
     function MAX_PARTICIPANTS() external view returns (uint256);
@@ -29,6 +31,27 @@ interface IBillSplitter {
     /// @param participants The addresses that share the amount.
     /// @return requestId The ID of the new request. IDs start at 1 and increase by 1.
     function createRequest(uint256 amount, address[] calldata participants) external returns (uint256 requestId);
+
+    /// @notice Creates a request that splits the amount by percentage. The caller becomes the requester.
+    /// @param amount The total to collect from the participants, in wei.
+    /// @param participants The addresses that share the amount.
+    /// @param percentages One percentage for each participant, in basis points (1 percent is 100).
+    ///        They must add up to 10000.
+    /// @return requestId The ID of the new request.
+    function createRequestByPercentage(
+        uint256 amount,
+        address[] calldata participants,
+        uint256[] calldata percentages
+    ) external returns (uint256 requestId);
+
+    /// @notice Creates a request that splits the amount by exact amounts. The caller becomes the requester.
+    /// @param amount The total to collect from the participants, in wei.
+    /// @param participants The addresses that share the amount.
+    /// @param amounts One amount for each participant, in wei. They must add up to `amount`.
+    /// @return requestId The ID of the new request.
+    function createRequestByAmounts(uint256 amount, address[] calldata participants, uint256[] calldata amounts)
+        external
+        returns (uint256 requestId);
 
     /// @notice The number of requests created so far. It is also the latest request ID.
     function requestCount() external view returns (uint256);

@@ -25,6 +25,22 @@ contract MockBillSplitter is IBillSplitter {
         emit RequestCreated(requestId, msg.sender, amount, participants);
     }
 
+    function createRequestByPercentage(uint256 amount, address[] calldata participants, uint256[] calldata)
+        external
+        returns (uint256 requestId)
+    {
+        requestId = 3;
+        emit RequestCreated(requestId, msg.sender, amount, participants);
+    }
+
+    function createRequestByAmounts(uint256 amount, address[] calldata participants, uint256[] calldata)
+        external
+        returns (uint256 requestId)
+    {
+        requestId = 3;
+        emit RequestCreated(requestId, msg.sender, amount, participants);
+    }
+
     function requestCount() external view returns (uint256) {
         return _accounts.length - 2;
     }
