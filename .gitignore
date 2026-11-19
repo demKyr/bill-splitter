@@ -1,0 +1,7 @@
+.DS_Store
+node_modules/
+# Slither output
+crytic-export/
+.hooks.log
+# Written by `npx skills add`
+skills-lock.json

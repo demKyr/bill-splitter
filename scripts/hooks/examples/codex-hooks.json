@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "apply_patch",
+        "hooks": [
+          { "type": "command", "timeout": 10, "command": "node \"$(git rev-parse --show-toplevel)\"/scripts/hooks/guard-locked.mjs" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch|Bash",
+        "hooks": [
+          { "type": "command", "timeout": 10, "command": "node \"$(git rev-parse --show-toplevel)\"/scripts/hooks/guard-locked.mjs --after" }
+        ]
+      },
+      {
+        "matcher": "apply_patch",
+        "hooks": [
+          { "type": "command", "timeout": 120, "command": "\"$(git rev-parse --show-toplevel)\"/scripts/hooks/forge-check.sh" }
+        ]
+      }
+    ]
+  }
+}
