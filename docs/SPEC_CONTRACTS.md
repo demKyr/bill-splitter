@@ -41,3 +41,4 @@ The contract handles ETH only: no ERC-20 tokens. It has no deadlines and no part
 - P7. The contract rejects a call to `hasPaid` for an address that is not a participant with `BillSplitter__NotParticipant`.
 - P8. When a payment breaks more than one rule, the contract rejects it with the error of the first rule that it breaks. The contract checks in this order: request ID (R10), participant (P4), second payment (P3), amount (P2).
 - P9. The contract rejects a payment that is above the share with `BillSplitter__WrongPayment`. A payment must be equal to the share. This check is part of the amount check (P2) in the order of P8.
+- P10. When the ETH transfer of a withdrawal fails, the contract rejects the withdrawal with `BillSplitter__TransferFailed`. The requester keeps its collected ETH.
