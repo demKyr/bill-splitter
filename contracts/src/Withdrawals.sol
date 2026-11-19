@@ -17,10 +17,10 @@ abstract contract Withdrawals is BillSplitterBase {
         uint256 amount = _withdrawable[msg.sender];
         if (amount == 0) revert BillSplitter__NothingToWithdraw();
 
+        _withdrawable[msg.sender] = 0;
         (bool sent,) = msg.sender.call{value: amount}("");
         if (!sent) revert BillSplitter__TransferFailed();
 
-        _withdrawable[msg.sender] = 0;
         emit Withdrawn(msg.sender, amount);
     }
 }
