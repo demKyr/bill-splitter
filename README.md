@@ -109,3 +109,5 @@ Part 2 is complete when:
 1. `forge test` passes in `contracts/`, and `npm run typecheck --prefix webapp` passes.
 2. On the page, you can create a request as Alice, pay as Bob, and withdraw as Alice.
 3. The two conditions of Step 3 hold for the whole system.
+
+## 5. Part 3: percentage and exact amount splits (my addition)
