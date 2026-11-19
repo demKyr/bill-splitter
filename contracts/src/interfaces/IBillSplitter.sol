@@ -38,11 +38,9 @@ interface IBillSplitter {
     /// @param percentages One percentage for each participant, in basis points (1 percent is 100).
     ///        They must add up to 10000.
     /// @return requestId The ID of the new request.
-    function createRequestByPercentage(
-        uint256 amount,
-        address[] calldata participants,
-        uint256[] calldata percentages
-    ) external returns (uint256 requestId);
+    function createRequestByPercentage(uint256 amount, address[] calldata participants, uint256[] calldata percentages)
+        external
+        returns (uint256 requestId);
 
     /// @notice Creates a request that splits the amount by exact amounts. The caller becomes the requester.
     /// @param amount The total to collect from the participants, in wei.
